@@ -1,0 +1,56 @@
+viewport 0.08 0.95 0.1 0.95
+
+# IPD
+panel 3 3 1
+expand 0.75
+data OverheadVsStageIPD.txt
+xcol 1
+ycol 2
+limit 0.5 10.5 0 1.25
+ticksize 1 0 0.5 5
+box bcnst bcnst
+points
+ecol 4
+errorbar 4
+ecol 5
+errorbar 2
+mtext t 2.0 0.5 0.5 Image Processing/Detection
+mtext l 1.95 0.55 0.5 Average Overhead Per Stage (s)
+
+# MOPS
+panel 3 3 2
+expand 0.75
+data OverheadVsStageMOPS.txt
+xcol 1
+ycol 2
+limit 0.5 5.5 0 0.44
+ticksize 1 0 0.1 5
+box bcnst bcnst
+points
+ecol 4
+errorbar 4
+ecol 5
+errorbar 2
+mtext t 2.0 0.5 0.5 Moving Objects 
+
+# Assoc
+panel 3 3 3
+expand 0.75
+data OverheadVsStageAssoc.txt
+xcol 1
+ycol 2
+limit 0.5 8.5 0 0.32
+ticksize 1 0 0.1 5
+box bcnst bcnst
+points
+ecol 4
+errorbar 4
+ecol 5
+errorbar 2
+mtext t 2.0 0.5 0.5 Association
+
+
+panel 1 1 1
+viewport 0.05 0.95 0.115 0.95
+expand 1.25
+xlabel Stage

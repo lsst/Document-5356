@@ -1,0 +1,99 @@
+% section 1: Introduction
+
+\section{Introduction}
+
+Data Challenge 2 (DC2) is the second in a series of prototypes of
+the LSST Data Management System (DMS).  Through these data challenges,
+we seek to identify the most challenging technical problems to
+building a DMS that meets the LSST science goals.  We prototype
+specific solutions to these challenges with the expectation that by
+the start of the construction phase of the telescope, we will have a
+well-defined plan for how to build a DMS that can perform at the
+level needed by first light.  Despite the prototyping nature of the
+data challenges, we are not producing throw-away code; rather, we
+expect that the software we produce in the data challenges will serve as
+the foundation for the DMS that will be completed during the construction
+phase.  
+
+In Data Challenge 1 (DC1), we focused on the DMS middleware design for
+supporting nightly processing.  In particular, we designed and
+prototyped the pipeline framework that would host the scientific
+algorithms used to process the data coming from the telescope.  DC1
+did not include actual implementations of scientific algorithms but
+rather tunable \emph{resource consumers} that simulate the expected
+computation load of the algorithms.  In DC2, we focused on replacing
+these simulators with real implementations of the scientific
+algorithms.  More of our software architecture was refined, including
+the choice of using C++ to implement compute-intensive components and
+Python for integrating components, and we built a software development
+environment.  Consequently, we updated the pipeline framework into
+this new architecture.  We executed our second-generation nightly pipeline
+on real astronomical data from the Canada-France-Hawaii Telescope's
+Legacy Survey.  
+% need DC1 report reference
+% need CFHTLS reference http://www.cfht.hawaii.edu/Science/CFHLS/
+
+This report describes the results of Data Challenge 2.  We enumerate
+our goals, summarize the implementation, and report on what we've
+learned from it.  
+
+\subsection{Goals of DC2}
+\label{Goals}
+
+As laid out prior to beginning implementation, the goals of Data
+Challenge 2 were to:
+\begin{itemize}
+\item Demonstrate the use of astronomical algorithms for nightly
+  processing in an LSST processing framework.
+\item Further develop and demonstrate common application framework
+  functionality.
+\item Update the middleware implementation to enable the hosting and
+  execution of C++ application classes.
+\item Establish an LSST simulated object/source database for testing
+  by the broader collaboration.
+\item Demonstrate a database partitioning scheme.
+\item Demonstrate integration of the Moving Objects Prediction
+  Software (MOPS) into the LSST framework. 
+\item Pilot the software development and testing process for future data
+  challenges and the LSST construction phase.
+\item Establish a reusable code baseline for future data challenges and
+  the LSST construction phase.
+\item Test the bandwidth utilization of the UDT protocol in the
+  context of LSST data replication between Chile and the US.
+\end{itemize}
+
+As of this writing, all but the last goal have been addressed.  This
+last goal is part of a now-expanded experiment to test data transfer
+tools over long-distance networks.  The results of this work will be
+discussed in a subsequent report and therefore will not be discussed
+further here.  
+
+\subsection{Metrics and Validation of DC2}
+
+At the start of the DC2, we set down a list of deliverables that we
+would need to achieve to validate that we had met our goals.  These
+deliverables were:
+\begin{itemize}
+\item Demonstration of a nightly processing pipeline that operates
+  continuously on a set of input data. This processing includes at
+  least image subtraction, source detection, association, and moving
+  object detection using MOPS. As stretch goals, we would also include
+  image linearization (flat-fielding, bias subtraction, etc.) and WCS
+  determination.
+\item Production of a persistent database of source detections and
+  associations as a result of the nightly processing. 
+\item Execution of MOPS automatically within the nightly pipeline framework.
+\item Management of all original code used in DC2 via our
+  Subversion (SVN) repository.
+\item Demonstration of the use of LSST framework and support classes.
+\item Employment of a harness that accesses MP functionality within a
+  compiled layer but which can execute application code via a Python
+  interface. 
+\end{itemize}
+
+As we describe below, we have in the course of DC2 clearly met the baseline
+milestones.  We did not impose formal metrics on the data quality
+produced by the astronomical application code in DC2.  We have
+nonetheless assessed the data quality, and comment on it in the report sections
+that follow.
+

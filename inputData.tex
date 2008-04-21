@@ -1,0 +1,163 @@
+% section X: Input Data
+
+\section{Input Data}
+\label{sInDat}
+
+\subsection{Input Images}
+
+As part of our long-term strategy for our data challenges, we have
+intended to apply our software to both simulated LSST images and real
+mosaic images from existing telescopes.  While the former category
+allows to ensure we meet the requirements imposed by our own telescope
+and data acquisition system, the latter is important for two reasons.
+First, real data forces us to deal with real-world observational
+artifacts and the unexpected consequences they present.  Second, we
+hope that by operating on a variety of existing data, our software will retain
+sufficient generality that many of the components will be useful
+outside the context of LSST.  
+
+At this time we do not have simulated images that are sufficient for
+validating science pipelines; thus, in DC2, we focused on two existing
+datasets that are similar to what we expect to get from LSST.  Both of
+these datasets come from the Canadian-France-Hawaii Telescope (CFHT)
+using the MegaCam mosaicing camera.  This camera features a focalplane 
+of 36 2048 \by\ 4612 pixel CCDs (a total of 340 megapixels),
+covering a full 1 degree \by\ 1 degree field-of-view with a resolution of
+0.187 arcsecond per pixel.  As discussed below in \Sec{sInDat-t}, we
+approximate the images that the LSST camera will be delivering to the
+DMS by dividing each CFHT CCD into 8 1056 \by\ 1161 pixel sections for a
+total of 288 images, each closely equivalent in the number of pixels
+to the images produced by the individual amplifiers of the LSST
+camera.  By comparison, the LSST camera will contain 189 CCDs, each
+with 16 2000 \by\ 500 amplifier sections, for a total of 3024 outputs.
+So, in the form we have prepared it, the CFHT Megacam data is roughly
+10\% of both the number of amplifiers and the number of pixels
+possessed by LSST.
+
+The first of the two datasets we selected comes from the CFHT Legacy
+Survey (CFHT-LS)\footnote{http://www.cfht.hawaii.edu/Science/CFHLS/}.
+This survey had three parts to it: two wide and
+shallow, and one deep.  In the ``deep'' survey, the CFHT-LS
+team chose four 1 square-degree fields that were observed repeatedly
+to obtain up to 132 hours of integration time across 5 filter bands
+for high sensitivity to the dimmest galaxies.  The availability of
+repeated exposures of the same field made this a particularly good
+choice as an LSST pre-cursor dataset.  In particular, we chose to use
+the so-called \textit{D4} field because of its close proximity to the
+ecliptic.  The increased chance of detecting solar system objects
+provided by this field allows us to exercise our MOPS pipeline.  
+
+The second dataset we chose was the Thousand Asteroid Light Curve
+Survey 
+(TALCS)\footnote{http://irtfweb.ifa.hawaii.edu/~sjb/CD07/abstracts/Masiero.CTabs.pdf}. 
+This survey is producing repeated observations
+of asteroids that can be used to measure their light curves.
+Consequently, this is an even better set for exercising MOPS.
+However, because of minor complications in acquiring and preparing the
+TALCS data, we were not able to incorporate the data in time for DC2.
+Nevertheless, we expect to use this data in DC3.  
+
+\subsection{Preparing the CFHT-LS Deep Data}\label{tInDat-prep}
+
+As described in the previous section, the Image Processing and Detection pipeline
+focuses on the image subtraction as input to the detection of new,
+variable, and moving sources.  Thus, to use the CFHT-LS Deep data in
+DC2, we needed (a) calibrated mosaic images of each exposure of
+the field and (b) a deep, stacked image of the field to
+represent the static sky.  Both of these are available from the
+CFHT-LS archive.  As a pre-processing step for DC2 (that is, prior to
+presenting the data as input to the pipelines), we resampled the
+stacked image to the observational footprint of each calibrated mosaic
+we planned to process; we refer to these resampled images as
+\textit{template images}.  
+
+\subsubsection{Creation of Template Images}\label{sInDat-t}
+
+We downloaded the stacked images of the D4 field in the R and
+I-band, D4.2007B.R.fits and D4.2007B.I.fits.  These were used to
+derive the template images for the Image Subtraction portion
+(\Sec{ImageSubtraction}) of the DC2 pipeline.  The process of
+creating these template images proceeded as follows.
+
+Every nightly science image is represented by a \code{.fits} file,
+obtained from the CFHT-LS archive, and an associated \code{.head}
+file, obtained directly from Stephen Gwyn, a member of the CFHT-LS and
+the person responsible for creating the stacked images.  The
+\code{.head} files contain updated astrometric information not
+available in the \code{.fits} header.  These \code{.head} files were
+produced during creation of the stacked images, and result from
+running the program
+\code{Scamp}\footnote{http://terapix.iap.fr/soft/scamp}.  \code{Scamp}
+solves for a common cubic order focalplane distortion (\code{PVn\_n}
+keywords) from an ensemble of input images, as well as the pointing,
+scale, and rotation of each individual science image (\code{CRPIXn},
+\code{CRVALn} and \code{CDn\_n} keywords).  These non-linear terms
+were essential for aligning the stacked image with each science image
+to sub-pixel levels.
+
+We extracted the header information associated with each of the 36
+CCDs in the CFHT focalplane from each science image's \code{.head}
+file.  This would serve as the reference astrometric coordinate system
+that we warp the stacked image to, yielding the template.  We next
+used the program
+\code{Swarp}\footnote{http://terapix.iap.fr/soft/swarp} to extract
+\textit{only} that portion of the stacked image that overlapped with
+the coordinate system defined in the \code{.head} file.  In addition,
+the flux was resampled within this window to align exactly with the
+science image, yielding a template image aligned at the subpixel
+level.  The header files suggest that the internal RMS of the solution
+is $0.1\arcsec$, with an external RMS of approximately $0.3\arcsec$.
+%
+% TSA comment:  do we want to say anything about the small number
+% of realy large alignment failures?
+%
+The resulting fits files were 4644 by 2112 pixels in size.  Since we
+expect to operate on $2k \times 0.5k$ images for LSST, we further
+subdivided the images into eight $1k \times 1k$ subimages to more
+accurately simulate LSST operations.
+
+\subsubsection{Creation of Variance and Mask Images}\label{tInDat-vm}
+
+Each image containing the pixel information was renamed with the
+extension \code{\_img.fits} to conform to the \code{MaskedImage}
+formalism.  We then synthesized variance (\code{\_var.fits}) and mask
+images (\code{\_msk.fits}).  For the template, we made the assumption
+that the image was noise-free and contained no masked pixels, so the
+variance and mask images were all zero-valued.  For the science
+image, we synthesized its variance by dividing the science pixels by
+the \code{GAIN} value from the image header (effectively ignoring the
+readnoise, which averages $\sim 5$ electrons).  For its mask, we
+extracted the \code{SATURATE} value from the image header, and masked
+all pixels within 95\% of this value.  This was sufficient for masking
+the majority (but not all; see
+\Sec{ImageSubtraction-Performance}) of saturated pixels.  For
+both the template and science image's mask, we added aligned mask
+planes for ``bad'' (\code{MP\_BAD=0}), ``saturated'' (\code{MP\_SAT=1}),
+``interpolated'' (\code{MP\_INTRP=2}), ``cosmic ray'' (\code{MP\_CR=3}),
+and ``edge'' (\code{MP\_EDGE=0}) pixels.  In the step above, we set
+both the \code{MP\_BAD} and \code{MP\_SAT} bits.
+
+\subsection{Input Object Catalog}
+
+The Input Object Catalog was prepared using data from D4 catalog,
+detections from R and I bands were used (files D4.2007B.R.cat and 
+D4.2007B.I.cat). Detections from these two files were associated
+using the procedure documented 
+elsewhere\footnote{http://lsstdev.ncsa.uiuc.edu/trac/wiki/dbD4ObjectCatalog}.
+Objects were created for each pair of detections, and for the remaining 
+unmatched detections. The total number of created objects was 450,000
+and the total size was 1 GB.
+
+\subsection{Input Orbit Catalog}
+
+The Moving Objects Pipeline uses a catalog of orbits for known solar
+system objects as one of its inputs.  In the production system, the
+catalog would respresent our most up-to-date knowledge of the solar
+system object orbits as computed by the special-purpose pipeline known
+as \textit{DayMOPS} (\Sec{sApps-mops}) that runs each day to incorporate
+the previous night's moving object detections into the orbit
+calculations.  For DC2, we used a pre-computed object catalog
+generated by feeding the the Minor Planets Center 
+catalogue\footnote{http://cfa-www.harvard.edu/iau/mpc.html} into
+the DayMOPS software.
+

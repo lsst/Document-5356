@@ -1,0 +1,28 @@
+At this location is the AASTeX style file (aastex.cls), the skeleton file itself
+(dc2report.tex), and a series of stub files for the various sections within the
+report, each of which gets included when dc2report.tex is TeXed.
+
+More information about the AASTeX article class is at 
+http://ucpjournals.uchicago.edu/AAS/AASTeX.
+
+There is also a sample chapter file "sampleChapter.tex" showing how to include
+an EPS file and how to make a table. If you don't know how to make an EPS file
+for graphics, here's how.
+
+Step 1: Say, "David, can you make this into an EPS file for me?"
+
+Step 2: I'll do it.
+
+If you're not a TeX user, don't install and learn TeX just for this report;
+check in (or send me) the plain text and graphics, and I'll set it for you.
+
+On Mac and Linux, Tex-ify the report using the commands
+
+latex dc2report
+dvipdf dc2report
+
+from the report directory. The product will be dc2report.pdf.
+
+I'm happy to help with TeXnical questions.
+
+-- David @%<

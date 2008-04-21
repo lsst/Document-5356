@@ -1,0 +1,51 @@
+\subsubsection{Launching DC2 via the Orchestration Layer}\label{sMw-orc}
+
+In the LSST reference design, the \emph{orchestration layer} is a
+component of the DMS that is responsible for preparing and configuring
+a pipeline, executing it on a parallel platform, monitoring its
+progress, and cleaning up the results after it has finished.  More
+specifically, the preparation and execution of a pipeline would
+triggered by an event containing a logical name for the pipeline to
+run, along with logical identifiers for the data it is to operate on.
+The logical pipeline name would be used to ``look up'' the appropriate
+policy files in a policy repository.  The policy files would be
+retrieved, possibly tweaked, and then deployed onto the target
+platforms as necessary.  
+
+In DC2, the orchestration layer was not a component of focus;
+nevertheless, we did require the ability to setup and execute the DC2
+pipelines in a consistent and automated way.  This functionality was
+built into a package called \code{dc2pipe}.  Even though this
+package is not intended to be an attempt to meet the general
+orchestration layer requirements, it does share in some of the
+concepts from the reference design.  
+
+The pipelines are launched via a core script called \code{launchDC2.py}.
+It is configured via a top-level policy file which sets some global
+parameters such as the working home directory for the execution
+(\code{/lsst/DC2root}), the directory representing the policy
+repository, and the file containing the list of exposures to process
+through the pipelines.  This policy file also sets some
+pipeline-specific parameters.  Most important is the list of nodes to
+run the pipeline on along with the number of processes to run on each
+node.  When the \code{launchDC2.py} script is executed, the operator
+passes in this top-level policy file and a name to give to that
+particular execution (the \emph{run-ID}).  To prepare for the
+execution, this script will: 
+\begin{itemize}
+\item Ensure that MPI and ssh are properly configured to execute the
+execution;
+\item Create the run-specific database tables to be used in the
+database;  
+\item Create a working home for the execution named after the run-ID 
+under \code{/lsst/DC2root} for holding input data, output data, and
+configuration information; and
+\item Cache copies of the pipeline policy files to the working home.
+\end{itemize}
+
+Once the preparation is complete, the script executes the pipelines,
+each as an MPI application on the configured head node for the
+pipeline.  
+
+
+

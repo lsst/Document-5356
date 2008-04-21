@@ -1,0 +1,157 @@
+\documentclass[preprint]{aastex}
+\usepackage{graphicx}
+
+\newcommand{\code}[1]{\texttt{#1}}
+\newcommand{\Fig}[1]{Fig.~\ref{#1}}
+\newcommand{\Sec}[1]{Sec.~\ref{#1}}
+\newcommand{\Table}[1]{Table~\ref{#1}}
+\newcommand{\ticket}[1]{ticket \code{\##1}}
+\newcommand{\by}{$\times$}
+
+% -- a @%< hack to redefine placement of abstract in \maketitle
+\makeatletter
+\def\@maketitle{%
+ \newpage
+ \begingroup
+  \let\footnote\thanks
+  \let\email\make@authoremail
+  \let\affil\make@affil
+  \let\altaffilmark\make@altaffilmark
+  \let\altaffiltext\make@altaffiltext
+  \let\and\make@and
+  \@title
+  \@author
+  \@date
+  \par
+  %\@abstract
+  \@ifxundefined\keyword@list{}{%
+   \expandafter\@keywords
+   \expandafter{\keyword@list}%
+  }%
+ \endgroup
+ \clearpage
+}%
+\makeatother
+
+
+\shorttitle{LSST Data Challenge 2}
+\shortauthors{Axelrod, Becker, Plante et al.}
+
+\DeclareGraphicsExtensions{.pdf,.jpg,.png}
+
+\begin{document}
+
+\title{LSST Data Challenge 2}
+
+
+% -- Author/Affiliation information
+\author{Tim Axelrod, Robyn Allsman, Jeff Kantor, Jon Myers, 
+        Francesco Pierfederici}
+\affil{LSST Corporation}
+
+\and\author{Serge Monkewicz}
+\affil{NASA Infrared Processing and Analysis Center}
+
+\and\author{Greg Daues, David Gehrig, Steve Pietrowicz, Raymond Plante}
+\affil{National Center for Supercomputing Applications}
+
+\and\author{Jacek Becla, Kian-Tat Lim}
+\affil{Stanford Linear Accelerator Center}
+
+\and\author{Andrew Becker, Lynne Jones, Russell Owen, Nicole Silvestri}
+\affil{University of Washington}
+
+\and\author{Robert H. Lupton}
+\affil{Princeton University}
+
+\and\author{Jeff Bartels}
+\affil{Cirrus Enterprises}
+
+\begin{centering}
+\textbf{ABSTRACT}
+
+\begin{quotation}\noindent%
+This report describes the second in a series of formal prototypes of
+the LSST Data Management System referred to as Data Challenge 2 (DC2).
+The focus of this data challenge is integrating real scientific
+algorithms that are important to LSST nightly processing into a
+general pipeline processing framework and then using the system to
+process real astronomical data from a large CCD mosaic.  We enumerate the goals and
+metrics for DC2, summarize the architecture of the DC2 pipeline
+system, and review the science application and middleware
+components that make up the system.  Finally, we present the results
+of executing DC2 on data from the CFHT Legacy Survey and highlight the
+important conclusions that will be used as input into the next data
+challenge.  
+\end{quotation}
+\end{centering}
+
+\tableofcontents
+\clearpage
+
+% -- section 0
+\input{summary.tex}
+\clearpage
+
+% -- Section 1
+\input{introduction.tex}
+
+% -- Section 2
+\input{components.tex}
+
+% -- Section 3
+\input{inputData.tex}
+
+% -- Section 4
+\section{Software Framework}
+
+Our software framework is the toolbox with which we've been able
+construct a working DC2 components.  It starts with a software
+development environment which includes tools and processes for design
+and implementation of the code as well as system for compiling the
+code into libraries in a consistant manner that accounts for all the
+component interdependencies.  In this environment we have built up set
+of reusable components that allow us to implement the scientific
+algorithms.  These include components that provide access to
+middleware capabilities ({\tt mwi}).  It also includes data structures
+(such as an \code{Image}) central to building algorithm
+implimentations as well as databases and database services.  Finally,
+framework provides a middleware necessary for running pipelines.  At
+the center of this is the pipeline framework for creating and
+executing pipelines.  Also supporting pipelnes is the event-based
+communication layer and the \textit{pipeline orchestration} layer used
+for setting up and launching pipelines. 
+
+\input{build.tex}
+
+\input{mwi.tex}
+\input{fw.tex}
+\input{database.tex}
+\input{harness.tex}
+
+\subsection{Pipeline Control}
+\input{events.tex}
+\input{launch.tex}
+
+% -- Section 5
+\section{Application Layer}
+
+The preceding chapter described the software infrastructure upon 
+which the DC2 pipeline was created and run. Although these
+components are all a necessary part of DC2 --- and will continue
+to play a role through the life of the LSST project --- none of them can
+accurately be described as fundamentally astronomical or
+photometric in nature. Instead, they form the framework upon which 
+the actual science application is constructed. We turn now to 
+a description of the application layer of DC2.
+
+\input{imageSubtraction.tex}
+\input{detection.tex}
+\input{mops.tex}
+\input{association.tex}
+
+% -- Section 6
+\input{conclusion.tex}
+
+
+\end {document}

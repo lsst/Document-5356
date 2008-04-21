@@ -1,0 +1,106 @@
+% Subsection 3.2: mwi
+
+\subsection{Database}
+\label{database}
+
+DC2 used as the underlying DBMS the MySQL Community Edition version 5.0.45.
+A single database server was used, running on a dedicated commodity
+machine (lsst10) with dedicated SAN-attached disk storage.
+Each DC2 run created and used a separate dedicated database. At the end of DC2 
+we had over 200 databases, occupying a total of 126 GB of disk space.
+
+\subsubsection{Schema}
+
+The DC2 database schema consisted of 23 tables. These tables covered
+all DC2 products requiring the database, including objects, 
+difference sources, moving objects, predicted positions of moving objects 
+and their orbits, exposure metadata, and some internal association-related 
+tables. In practice this is a small subset of the entire LSST schema, 
+which currently consists of over 100 tables. The full LSST schema, 
+in addition to products used in DC2, includes a draft schema for provenance 
+and calibration related tables.
+
+The schema of the tables used in DC2 was very similar to the schema of the
+corresponding tables in the LSST schema. Even though in DC2 we did not 
+need all the columns from tables like Object or DIASource, we kept them
+to maintain realistic row sizes.
+The DC2 specific changes applied to the schema were related to specifics
+of the CFHT input data. These changes include adding a few columns to 
+the Object table and keeping exposure metadata at a different level ---
+in DC2 we kept exposure metadata at the CCD level, while in production we 
+expect to manage detailed exposure metadata at the level of individual 
+amplifiers. 
+
+\subsubsection{Usage}
+
+The main role of the database was to act as a persistent store and
+allow efficient querying of the catalogs and metadata.
+An additional role of the DC2 database was to act 
+as a communication channel between the pipelines --- in particular,
+between the IPD and association pipelines and between the MOPS
+and association pipelines.
+
+In the former case the IPD pipeline wrote newly detected 
+difference sources to the database, and the association pipeline read them.
+The communication was done through a dedicated in-memory table.
+In the latter case MOPS wrote predicted
+positions of moving objects to the database, again for reading by the
+association pipeline.
+
+\subsubsection{Direct Ingest Without Catalog Ingest Service}
+
+One of the main differences from our database usage
+in DC1 was the removal of the Catalog Ingest Service (CIS).
+In DC1 each processing slice dumped data into a well known
+location, and CIS ``pulled'' the data and inserted it
+into the database. Such an approach allowed us to avoid multiple concurrent
+inserts into the same set of tables --- CIS concatenated all
+the smaller inserts into a single bigger one. In DC2 we decided to test a 
+different approach: we removed CIS, and allowed individual slices 
+to ``push'' data directly into the database (via the Persistence
+framework). 
+
+To ingest data efficiently we used tab separated value (TSV) files --- 
+the most efficient technique to insert multiple rows into a MySQL 
+table. This technique was also used by CIS in DC1. Each slice used 
+its own TSV file. Since all tables (except a few MOPS-related ones) 
+were of MyISAM type, table-level locking was used, which is 
+the worst-case scenario when performing concurrent inserts. 
+Inserts were done \textit{ad hoc}, without any attempt to synchronize or 
+de-synchronize them. In practice, due to enforced synchronization 
+on stage boundaries, all slices wrote to the database at almost the same time. 
+Again, this is the worst-case scenario. In DC2 we had 36 slices, 
+and each slice wrote 36 rows on average. On average, it took 
+a very reasonable 0.05~sec per slice to complete the ingest.
+
+In production, we are expecting to have about 3000 slices --- one per amplifier.
+Each slice will produce a few dozen new difference sources.
+Should lock collisions be a problem due to the larger number of
+concurrent inserts, we could switch to a MySQL table type with row-level 
+locking or go back to the CIS-like approach and combine multiple 
+ingests into a single bigger one.
+
+\subsubsection{Issues and Lessons Learned}
+
+Based on standalone tests we ran in 2007 prior to the DC2
+final runs, we determined that in order to meet the 10~second
+real time requirement for the Association Pipeline, we needed to
+move some of the processing out of the database itself into custom-written
+code, and maintain a specialized copy of some data used by AP 
+in a custom file format, rather than keep it in the database. 
+Such an approach allowed us to tailor the match algorithm specifically 
+to our needs, and take advantage of data locality and partitioning. 
+More details about this approach, including the partitioning scheme, can 
+be found in \Sec{association} of this report.
+
+It might be possible in future versions of MySQL to teach the
+query optimizer to deliver a query plan similar to our custom 
+algorithm.  Today, however, such a task is very difficult if not impossible. 
+This is likely true for most, if not all, DBMS products available 
+today. We will periodically re-evaluate the custom versus in-database 
+approach, and will work with DBMS vendors on extending their 
+optimizers to better meet our needs.
+
+In all the places where MySQL was used, performance was not 
+an issue. This is true for both ingesting and querying the data.
+Essentially the database overhead was negligible. 

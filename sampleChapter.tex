@@ -1,0 +1,37 @@
+% section 6: sampleChapter
+
+\section{Sample Chapter}
+
+This chapter will not be included in the final report, but includes a figure containing a sample EPS file. It also includes a table. Much more information on the AAS\TeX\ class is available at \texttt{http://ucpjournals.uchicago.edu/AAS/AASTeX/}. I'm willing to help in the preparation of EPS files.
+
+%
+% How to include a single eps figure
+\begin{figure}
+\epsscale{.25} % for twiddling the size of the figure
+\plotone{cube.eps}
+\caption{The cube}
+\end{figure}
+
+%
+% How to include two side-by-side eps figures
+\begin{figure}
+\epsscale{.5} % for twiddling the size of the figure
+\plottwo{cube.eps}{cube.eps}
+\caption{Two more Platonic solids}
+\end{figure}
+
+%
+% How to create a table
+\begin{deluxetable}{lcr} % "lcr" = left, center, right align
+\tablewidth{0pt} % sets table to natural width
+% \rotate % puts table in landscape mode
+\tablecaption{A Really Spiffing Title}
+\tablehead{\colhead{Alpha} & \colhead{Beta} & \colhead{Gamma}}
+\startdata
+1 & 2 & 3\\
+Able\tablenotemark{a} & Baker & Charlie\\
+Groucho & Harpo & Chico\\
+\enddata
+\tablenotetext{a}{Now ``Alpha''}
+\end{deluxetable}
+

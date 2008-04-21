@@ -1,0 +1,316 @@
+% Subsection 4.4: Association
+
+\subsection{Association}
+\label{association}
+
+The task of the association pipeline (AP) is to compare information coming 
+from the latest telescope visit with historical knowledge of the sky;
+specifically, to determine which objects, if any, correspond to the difference 
+sources being produced by the detection pipeline (DP) and which of those
+sources correspond to the moving objects predicted to be in the field-of-view
+(FOV) by the NightMOPS pipeline. These associations provide the basis from
+which the alert generation pipeline will decide whether a difference source
+constitutes an interesting evolution of some existing object or is evidence
+of an entirely new object; i.e. whether or not an alert concerning the source
+should be sent out to the astronomical community at large. Keeping the number
+of alerts at a manageable level is paramount to their utility --- it follows
+that every attempt to avoid repetition in alert content must be made. The
+association pipeline therefore not only compares against historical knowledge
+of the sky, but also updates this knowledge: new objects for unmatched
+difference sources are created and difference sources are archived so that
+on future visits to the same FOV, they can be taken into account by the alert
+generation rules. For the same reasons, we envision that object attributes may
+also be updated according to their associated difference sources.
+
+\subsubsection{Architecture}
+
+The execution of the association pipeline is split into three main phases: a
+load phase, a compute phase, and a store phase. The first of these is
+concerned with loading historical data for the FOV being observed from disk
+into memory, the goal being to allow further computation to proceed with as
+few time-consuming disk accesses as possible. Next, the compute phase matches
+difference sources to objects and then moving objects to difference sources ---
+both matches are purely spatial, and are described in more detail below.
+Lastly, the store phase is in charge of updating historical knowledge of the
+sky based on the compute phase results.
+
+Given that the LSST object catalog is expected to contain between 14 billion
+(DR1) and 49 billion (DR11) objects at roughly 1.7kB per object and that the
+AP time budget per visit is only about 10 seconds, the load phase cannot be
+implemented na{\"\i}vely; both parallelization and partitioning are employed to
+meet performance targets. We first observe that the AP performs purely spatial
+matches, so little more than object ID and position are required to feed the
+compute phase. These attributes are extracted from the master copy of the
+object catalog, which is maintained in a relational database and is supplied
+as an input to a DC2 pipeline run. The resulting very thin vertical partition
+is stored in the file system to keep database load in check. However, at
+several hundred GB the partition remains impractical to read into (or keep in)
+memory and spatial partitioning is required for efficient access: objects are
+divided into equal height declination stripes, which are then physically
+partitioned into chunks of equal width in right ascension. For each chunk, the
+AP maintains 2 files: the first contains objects from the original input object
+catalog, and the second, a chunk \emph{delta} file, is dedicated to objects that
+were created as part of visit processing. The load and store phases only read
+and write files for chunks that overlap the visit FOV and the store phase
+writes only \emph{delta} files.
+
+Chunks are sized such that the spatial extents of a FOV can be tightly
+approximated by a relatively small set of chunks (\ensuremath{\sim}100
+for a full 10 deg$^{2}$ LSST FOV), minimizing I/O wasted on objects
+lying outside the FOV. This also allows the corresponding files to be
+distributed across many disks so that multiple worker slices can be used
+to read and write them in parallel. Unfortunately, one problem arises from
+this strategy: spatial matches are run in the pipeline master process in
+order to avoid slice-to-slice communication, a capability not
+supported by the DC2 pipeline framework. To see why slice-to-slice
+communication would be necessary if different slices handled matching for
+different parts of the sky, consider that a single difference source might
+match objects read by different slices. But running the compute phase
+in the master means that worker slices must somehow communicate data they've
+read back to the master. This is again a feature not fully implemented by the
+DC2 pipeline framework. To circumvent these limitations, AP worker slices read
+files into a shared memory region accessible to all other workers, as well as
+the master. This works well but constrains the AP to scale within the bounds
+of a single machine.
+
+Finally, it should be noted that the alert generation pipeline (AGP) will
+peruse much more than just a few attributes of each object and difference
+source: it is envisioned that each object matching a difference source as
+well as all historical difference sources associated with each matched object
+will be thoroughly examined. Accesses will be made to database tables rather
+than custom files, and are sparse if na{\"\i}ve spatial clustering is employed: the
+up to \ensuremath{\sim}10$^{5}$ difference sources will match objects scattered
+amongst up to 10$^{7}$ objects in the FOV. Though we expect that at most
+\ensuremath{\sim}500MB of object data must be read into memory for
+examination, and at most 300MB written, sparsely laid out objects would
+require either a large number of disk seeks or sequential reads of many times
+more data. In either case, parallelization over an inordinately large number
+of disks would be required for reasonable performance. We plan to address this
+issue by splitting the object table into two: one table for known variable
+objects and one for the rest. Since almost all difference sources are expected
+to match known variables, spatially clustering the variable object table will
+result in a dense layout of matched objects on disk, allowing much more
+effective use of I/O. Also, instead of loading variable objects during the 10
+second AP time-window, they can be pre-loaded as soon as the FOV is known,
+either by explicit inserts into an in-memory table or by issuing queries to
+warm up database caches. As the AGP is out of scope for DC2, this aspect of
+the AP is currently not implemented.
+
+\subsubsection{Test Platform and Data Volume}
+
+The AP was tested on a server with two Intel Xeon E5335 2.0GHz CPUs
+and 16GB of RAM, running Red Hat Enterprise Linux AS release 4. The AP was
+compiled without optimization (-O0) and a single 1 deg$^{2}$ FOV
+containing 417,327 objects was used as input. This FOV overlapped ~25 chunks,
+of which only 16 were non-empty. Analysis was performed using DC2 runs
+rlp0128 and rlp0130, for which per-visit maximums of 5086 difference
+sources and 22 moving object predictions were recorded. The worst-case figures
+for full-scale LSST are expected to be roughly 20 times larger: we will be
+dealing with up to 10$^{7}$ objects, 10$^{5}$ difference sources and a few
+thousand moving object predictions in a single FOV.
+
+\subsubsection{Implementation and Performance}
+
+\paragraph{Load Phase}
+
+A single worker Slice was used to read the roughly 15MB of data contained in
+the DC2 chunk files into memory. Due to last-minute problems with Lustre
+parallel file system configuration, chunk files were stored on an NFS volume:
+the very same volume containing exposure data operated on by the
+image-processing pipeline. The fact that the DC2 pipeline repeatedly visited
+the same FOV (virtually guaranteeing that chunk files were read from cache
+rather than disk) and the use of a contended NFS volume for storage
+invalidates DC2 timing results for this part of the load phase. However, by
+running tests in which the DC2 chunk files were loaded from dedicated SAS
+disk, these reads have been confirmed to complete in less than one second.
+
+Once objects for the field-of-view have been loaded, they are indexed into a
+data structure that supports the very fast proximity searches required by the
+spatial matches of the compute phase. Index construction duties are assigned
+to the load phase since there are no dependencies on data produced by other
+nightly pipelines --- the index can therefore be built while image processing
+and detection are running, rather than counting against the 10 second AP time
+budget. The data structure is built by bucket sorting objects on declination,
+giving a set of very fine declination stripes dubbed zones, and then sorting
+objects on right ascension within each zone. In total, a single thread takes
+\ensuremath{\sim}0.3 seconds to produce an index for the 417,327 objects in
+the DC2 input object catalog. Though the complexity of sorting objects within
+a zone is O(N log N) where N is the number of objects in a zone, the dominant
+costs in index construction are linear-time. Tests have been run in which 3.6
+million objects were indexed in \ensuremath{\sim}2.8 seconds by a single
+thread on a SunFire V240 (16GB RAM, 2 UltraSPARC IIIi 1.5GHz CPUs), so scaling
+up the number of objects by a factor of 10 to 20 from DC2 levels is not
+expected to be problematic. Nevertheless, if performance becomes an issue then
+index construction can be parallelized.
+
+\paragraph{Compute Phase}
+
+After index creation, the AP load phase is finished and the AP waits for the 
+DP to signal its completion via an event. Once this event is received, the AP
+reads the difference sources stored in the database by the DP into memory.
+In DC2, this took \ensuremath{\sim}0.12 seconds for every thousand difference
+sources read in, peaking at \ensuremath{\sim}0.6 seconds for 5000 difference
+sources. In production, 10$^{5}$ difference sources must be handled in the worst
+case: taking 12 seconds to read them into memory is unacceptable. Luckily,
+multiple opportunities for optimization on this front exist: first of all,
+the AP currently retrieves all attributes of difference sources, even
+though it uses only position and id. Secondly, database access occurs through
+a wrapper for a debug build of the CORAL database access library, adding 
+multiple layers of indirection on top of the native database API --- for DC3,
+the LSST database access wrapper will call native APIs directly. Finally, if
+these optimizations do not yield the necessary speed-ups, we plan to
+parallelize difference source reads.
+
+With difference sources for the visit in hand, the AP is ready to perform its
+first spatial match, the task being to find all objects within a fixed
+distance $R$ (DC2: 0.5 arcsec) of each difference source. This is 
+accomplished by using the object index created in the load phase: each zone
+in the index is chosen to correspond to a declination range slightly larger
+than $R$ so that for any given difference source position $P$, potential
+matches must be in one of 3 zones: the zone containing $P$ and the those
+immediately above and below. In addition, for each zone in the index a
+constant $\alpha$ is pre-computed such that any 2 points in the zone separated
+by more than $\alpha$ in right ascension must be separated by distance at
+least $R$. So, by searching for objects lying in one of 3 zones and that have
+right ascension within $\alpha$ of $P$ (which can be done with binary search
+since objects are sorted on right ascension within each zone) we quickly
+obtain a tight set of match candidates from which objects further than $R$
+from $P$ are easily removed. As a further optimization, we organize difference
+sources into a zone index and process them one zone at a time, in right
+ascension order within each zone. As a result, successive proximity searches
+exhibit good spatial locality; given the spatial organization of data in zone
+indexes, this translates to good memory locality.
+
+Building a zone index for between 772 and 5086 difference sources took
+from 0.8 to 5 milliseconds; elapsed time was roughly linear in the number of
+difference sources inserted into the index. Matching then took between 1.5
+milliseconds and 0.13 seconds, with most matches finishing in under 3
+milliseconds. We suspect the spikes in match timing are due to the spatial
+distribution of difference sources in particular visits, though this remains
+a topic of investigation for DC3. Between 182 and 2243 difference source to
+object matches were found; these were written to the database in 0.02 to 0.063
+seconds, with timing linear in the number of matches.
+
+At this point, the AP waits for an event signaling that NightMOPS has finished
+predicting which moving objects will appear in the visit FOV. As soon as this
+event is received, predictions are loaded from the database --- for DC2 runs
+under consideration, a maximum of 22 predictions per-visit were retrieved in
+roughly 0.015 seconds. Predictions with positional error ellipse semi-major
+axis length greater than 3 deg were discarded; the rest had both semi-major
+and semi-minor axis lengths clamped to 10 arcsec to avoid producing
+thousands of matches for the very large NightMOPS error ellipses. For each
+prediction, all difference sources not matching a known variable object and
+lying within the predictions error ellipse are found using a modified version
+of the spatial match algorithm described above. Match candidates are
+identified by computing a per-prediction error ellipse bounding box (in zone
+number and right ascension) and then using the difference source zone index
+created for the previous match to look them up. The scarcity of moving objects
+and error ellipse clamping led to sub-millisecond DC2 timings for this part of
+the compute phase.
+
+Finally, difference sources that will generate new objects are identified by
+scanning all sources and flagging those not matching any object; identifiers
+for flagged sources are then stored in the database. Both operations take time
+linear in the number of difference sources involved: in DC2, 230 to 2294 new
+objects were identified in 0.4 to 4 milliseconds and persisted in 0.011 to
+0.067 seconds. Lastly, the results of matching moving object predictions to
+difference sources are persisted; this took 0.018 seconds on average --- no more
+than 4 matches were found in a visit.
+
+\paragraph{Store Phase}
+
+With the results of the compute phase stored in per-visit database tables, the
+final task of the AP is to update historical knowledge of the sky. This
+process begins by writing out delta files for chunks overlapping the
+visit FOV. DC2 timings for this step, executed on a single worker slice,
+varied from 0.1 to 1 seconds. Swings in timing were caused by NFS contention ---
+the AP was often finishing a visit just as the image processing pipeline was
+loading science and template exposures for a subsequent visit. Further tests
+in which delta files were stored to dedicated disk revealed that these writes
+very consistently took between 0.6 and 0.7 seconds for about 1.3MB of data.
+
+Following delta file writes, a series of MySQL scripts are fired off. The
+first of these uses the match result tables to update the \code{Object} table:
+currently only the time of last observation and observation count in each
+filter is updated. The script also creates new objects from difference sources
+and sets the \code{objectId} of each difference source to the id of the
+closest matching object or the object created from it. Finally, it appends
+difference sources to the \code{DIASource} table. DC2 execution times for this
+script were either short or long: between 0.35 and 4.6 seconds, with only
+very few visits taking time between the two extremes. Furthermore, we found
+that the execution times for the SQL statements in the script as reported by
+MySQL consistently added up to significantly less than the total run-time of
+the script.
+
+The second script appends per-visit match results and NightMOPS predictions 
+to historical tables. This allows for debugging without littering a run
+database with hundreds of small tables, and can be toggled on or off using a
+policy file flag. The last script simply drops all visit specific tables
+created by DC2 pipelines and is again controllable via policy. These two
+scripts exhibit similar behavior to the first: execution time was quite large
+(3--4.5 sec, except for the last visit in a run, which took 0.15 sec) but
+timings for the individual statements as reported by MySQL do not add up. The
+cause of these discrepancies remains unclear --- we plan to investigate and
+address this issue in DC3.
+
+\subsubsection{Conclusions and Future Work}
+
+In total, the AP completed in 1.5 to 10.0 seconds per visit, averaging 7.4
+seconds with the vast majority of time spent in MySQL scripts that update the
+database at the end of a visit. Despite the use of a single-host NFS
+filesystem for disk storage and MySQL performance anomalies in the store
+phase, performance targets were either met or exceeded for all 62 visits
+under consideration, convincingly demonstrating the feasibility of the AP
+design for full scale LSST data volumes.
+
+Features to be implemented and/or investigated in the DC3 timeframe include:
+\begin{itemize}
+\item \emph{Expanded Python Interface}:
+    The AP currently exports a very minimal Python interface. For DC3 we
+    will expose the spatial matching algorithms to other pipelines which
+    require similar functionality.
+\item \emph{Probabilistic Matching}:
+    Positional error ellipses for both objects and difference sources are
+    available. Given a difference source matching multiple objects, these
+    can be used to pick the best matching object according to probabilistic
+    criteria (rather than simply picking the closest one). Alternatively
+    or in addition, all difference source to object matches could be
+    officially stored for later perusal.
+\item \emph{Proper Motion Correction}:
+    By storing proper motions along with object positions in chunk files,
+    object positions can be extrapolated to the times at which visits actually
+    occur (and at which difference source positions are measured), thereby
+    improving match accuracy. This extrapolation can be done by the load phase
+    and overlapped with disk I/O. It incurs minor computational costs, and scales
+    linearly in the number of objects.
+\item \emph{Correction for Refractive Effects}:
+    Also expected to have a significant impact on object positions are
+    color dependent refractive atmospheric effects. Using stored
+    colors for each object and the zenith angle for the visit, we expect
+    to be able to meaningfully improve the object positions used as input to
+    the spatial match routines.
+\item \emph{Transactions and Data Volume}:
+    We hope to investigate the feasibility of updating the database and chunk
+    files in transactional fashion with visit-level granularity, so that from
+    a database perspective each visit appears to have either completed
+    successfully or not at all. We also plan to run tests in which the input
+    \code{Object} catalog is significantly larger than the one used for DC2;
+    the goal will be to stress the I/O intensive portions of the AP with a
+    particular focus on more fully characterizing the performance of the
+    store phase.
+\end{itemize}
+
+Some of the proposed DC3 tasks will result in a significant size increase of
+chunk files --- brightnesses and position errors will need to be stored in the
+filesystem. Besides potentially complicating the process by which chunk
+files and the database are kept in-sync, increased demands will be placed on
+I/O and computational subsystems. Though we do not expect these to overwhelm
+the capabilities of a single server, we observe that future iterations of the
+AP may yet again increase these demands, especially as the design and
+requirements of the alert generation pipeline solidify. We therefore plan to
+re-implement the AP in terms of the slice-to-master and slice-to-slice
+communication primitives which are expected to be provided by the DC3 pipeline
+framework. This will improve AP scalability and has the added benefit of
+allowing the (relatively complicated) shared memory management code to be
+excised, significantly simplifying the AP implementation.
+

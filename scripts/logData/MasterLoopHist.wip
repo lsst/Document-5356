@@ -1,0 +1,47 @@
+viewport 0.08 0.95 0.1 0.95
+
+# IPD
+panel 3 3 1
+expand 0.75
+data MasterLoopVsVisitIPD.txt
+xcol 2
+limit 50 350 0 25
+box bcnst bc
+box bsi 0
+hist 0 400 40
+limit 50 350 0 0.14
+box bc bcnst
+mtext t 2.0 0.5 0.5 Image Processing/Detection
+mtext l 1.95 0.55 0.5 \fiN/N\dtot\d\fr
+
+# MOPS
+panel 3 3 2
+expand 0.75
+data MasterLoopVsVisitMOPS.txt
+xcol 2
+limit 45 65 0 83
+box bcnst bc
+box bsi 0
+hist 45 65 40
+limit 45 65 0 0.46
+box bc bcnst
+mtext t 2.0 0.5 0.5 Moving Objects 
+
+# Assoc
+panel 3 3 3
+expand 0.75
+data MasterLoopVsVisitAssoc.txt
+xcol 2
+limit 50 350 0 25
+box bcnst bc
+box bsi 0
+hist 0 400 40
+limit 50 350 0 0.14
+box bc bcnst
+mtext t 2.0 0.5 0.5 Association
+
+
+panel 1 1 1
+viewport 0.05 0.95 0.115 0.95
+expand 1.25
+xlabel Total Processing Time Per Visit (s)

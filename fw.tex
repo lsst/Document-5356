@@ -1,0 +1,203 @@
+% Subsection 3.1: fw -*- latex -*-
+
+\subsection{Framework}
+\label{FW}
+
+For DC2, we split the LSST framework into two
+parts, MWI (Middleware Interface; \Sec{MWI}) and FW.
+Each lies in its own namespace (\code{lsst::mwi} and \code{lsst::fw}).
+
+\subsubsection{C++ Classes}
+
+FW contains the framework classes related to processing astronomical images.
+The fundamental objects are:
+\begin{itemize}
+\item Images and Masks
+  \begin{itemize}
+  \item \code{Image}:
+    A 2-dimensional image.
+  \item \code{Mask}:
+    A set of 2-dimensional bitmasks.
+  \item \code{MaskedImage}:
+    A container of two \code{Image}s (the data and its variance) and a \code{Mask}.
+  \item \code{WCS}:
+    A World Coordinate System class.
+  \item \code{Exposure}:
+    A \code{MaskedImage} and its \code{WCS}.
+  \end{itemize}
+
+  \item Convolution Kernels
+    \begin{itemize}
+      \item Kernels: \code{AnalyticKernel}, \code{FixedKernel}, \code{Kernel}, \code{LinearCombinationKernel}.
+      \item Kernel's spatial variability: \code{Chebyshev1Function1}, \code{GaussianFunction1}, \code{Lanczos\-Function1},
+	\code{PolynomialFunction1} (and their 2-dimensional analogs).
+      \item Free functions to convolve \code{MaskedImage}s with Kernels.
+    \end{itemize}
+
+  \item Miscellaneous:
+    \begin{itemize}
+    \item \code{MaskedImageFormatter}:
+      Using \code{boost::persistence}.
+    \item\code{DiskImageResourceFITS}:
+      Saving image and mask data to FITS files.
+    \item \code{MovingObjectPrediction}:
+      A prediction of the current position of an object.
+    \item \code{DiaSource}:
+      The properties of a source detected in a difference image.
+    \item \code{Filter}:
+      A photometric filter (e.g.~\textit{g}).
+    \end{itemize}
+\end{itemize}
+
+All of these classes were implemented for DC2, and make use of
+the support classes defined in mwi (e.g.~\code{mwi::data::LsstBase},
+\code{mwi::utils::Trace}).  They are documented using doxygen (\Sec{build_docs}),
+although the level of the documentation is patchy; in particular,
+high-level documentation (motivation and examples) tends to be 
+missing. The documentation will be expanded in DC3.
+
+\paragraph{Images and Masks}
+
+\subparagraph{Image and Mask}
+The classes that contain pixels (\code{Image}, \code{Mask},
+\code{MaskedImage}, and \code{Exposure}) use JPL's VisionWorkbench
+(VW) to provide the fundamental pixel access; specifically
+\code{Image} and \code{Mask} contain a \code{vw::ImageView}.
+
+We have adopted two idioms to access pixels in DC2: registering
+a functor (derived from \code{fw::PixelProcessingFunc}) that should be applied
+to each pixel in the image, or explicitly iterating over the pixels.
+
+The functor approach is clean and object-oriented, but not very well
+suited to algorithms that process sets of pixels (e.g.~searching an
+image for connected pixels over threshold).  This approach was used e.g.~in
+measuring the centroid of a detected source.
+
+Explicit pixel access in VW uses an iterator rather than a pointer to
+access the pixels, although the VW header files state that the
+STL-compliant iterator (\code{vw::PixelIterator}) is slow, and should
+not be used in time-critical applications.  An alternative,
+(\code{vw::ImageView::pixel\_accessor}) may be used but is not a full
+STL iterator; we opted to use accessors for DC2.  These proved not to
+be rich enough to easily express common operations (e.g.~returning the
+value of the pixel just to the right of the accessor), but minor
+enhancements to the API would probably resolve these difficulties.
+
+The implementation of subsets of images is not complete; for example
+there is no \code{Image} API to get a sub-\code{Image} that shares
+pixels with the full \code{Image}.  The code that uses subimages
+does not uniformly and consistently allow for coordinate offsets,
+although this is likely to be a fruitful source of confusion in
+future data challenges.  How to do this consistently and transparently
+is not obvious.
+
+\subparagraph{Mask}
+LSST's bitplane class uses a dictionary to associate named planes
+(e.g.~\code{SATUR}) with bits (e.g.~\code{0x10}); the planes themselves
+are implemented as bitmasks within \code{vw::ImageView} as described above.
+
+This representation was chosen to allow us maximum flexibility --- in
+particular to allow modules to add planes as needed, and to import
+external masks (e.g.~CFHT bad-pixel masks).  During DC2 we realised
+that this flexibility came at a cost;  in order to apply operators
+to \code{Mask}s the bitplane dictionaries must first be reconciled,
+and this expensive step will be needed whenever different modules
+add the same planes in varying orders.
+
+For DC3 we intend to preserve the flexibility of named, extensible
+bitplanes, but make the dictionary a class variable rather than an instance
+variable (\ticket{322});  we expect this change to remove the
+need to reconcile \code{Mask}s.
+
+\subparagraph{MaskedImage}
+We represent images with associated masks and variances using \code{MaskedImage},
+with pixel accessors similar (but not identical) to \code{vw::ImageView::pixel\_accessor}.
+These have proved viable, but not especially flexible;  for example, there is
+no clean way to read a neighboring pixel value without also moving the mask and
+variance iterators.
+
+\subparagraph{\code{WCS}}
+LSST's world coordinate system class is currently implemented using Mark Calabretta's 
+\code{wcslib}\footnote{http://www.atnf.csiro.au/people/mcalabre/WCS}
+which represents the WCS in terms of FITS keywords, stored internally to \code{WCS}
+using \code{DataProperty} (\Sec{DataProperty}).  This has proved satisfactory
+for DC2, although the CFHT images caused problems with \code{wcslib}'s \code{wcsfix}
+function (\ticket{184}) and \code{wcslib} fails to read some apparently legal
+FITS headers (\ticket{259}).
+
+\paragraph{Convolution Kernels}
+
+\subparagraph{Kernel}
+\code{fw} supports a number of types of kernel derived from a class \code{Kernel}:
+\code{AnalyticKernel},
+\code{FixedKernel}, \code{LinearCombinationKernel}.  These can be thought
+of as small images, and are used to represent difference kernels (\Sec{ImageSubtraction}), and
+will in the future probably also be used to represent point spread functions,
+PSFs.
+
+An \code{AnalyticKernel} is defined by a function that can be used to evaluate
+any pixel within the kernel; a \code{FixedKernel} has the pixel values provided
+explicitly, and a \code{LinearCombinationKernel} is a linear combination of
+other kernels (e.g.~a set of Gauss-Hermite functions).  In general kernels
+are spatially varying, and \code{fw} provides a number of classes to express
+this: \code{Chebyshev1Function1}, \code{GaussianFunction1}, \code{LanczosFunction1},
+\code{PolynomialFunction1} (and their 2-dimensional analogs).
+
+Once a (possibly spatially varying) Kernel is defined, it may be
+applied to a \code{MaskedImage} to generate the convolution of the
+image with the specified kernel, taking proper account of the mask and
+variance.  In the future we expect to also support convolving single
+\code{Image}s.
+
+There are some concerns with the speed of convolution in DC2.  In the
+context of difference imaging, this has been partially resolved by
+adding a new kernel type, \code{DeltaFunctionKernel}, and providing
+a specialisation of the convolution code to exploit the special structure
+of a Kernel with only one non-zero pixel; this specialization has
+not been deployed in DC2.
+
+\paragraph{Miscellaneous}
+
+\subparagraph{Persistence}
+See the discussion in \Sec{persistence}.  The \code{fw} package
+provides support for persistence in terms of classes that
+implement \code{boost::persistence} for e.g.~\code{MaskedImage},
+and that are able to save image and mask data to FITS files.
+
+\subparagraph{MovingObjectPrediction}
+This is a prediction of the current position of an object, including
+errors.
+
+\subparagraph{DiaSource}
+This holds the properties of a source detected in a difference image.  The
+class itself contains a large number of parameters as
+expected by the database, but only a few are actually measured
+for DC2;  even for these, only place-holder algorithms are
+employed.
+
+\subparagraph{Filter}
+This identifies a photometric filter (e.g.~\textit{g}).
+
+% \subsubsection{Python}  Moved to build.tex and generalized for all
+%  of DC2
+
+
+%  \subsubsection{Testing}  Moved to build.tex and generalized for all
+%  of DC2
+
+\subsubsection{Timings}
+\label{fwTiming}
+
+The DC2 implementations of critical functions are still slower than we
+need.  A preliminary investigation focussed on the convolution
+operations, hoping that lessons learned will apply wherever we look at
+pixels.  We are analyzing the code at various levels, including at the
+assembler level to understand the efficiency of our most
+compute-intensive loops.  It is clear to us that there is work to be
+done.  In particular, we find an over-abundance of register loads
+(this might be better on more modern processors), and pointer updates
+are not simple offsets by compile-time constants (e.g.~4).  It seems
+likely that a few well chosen changes to the lowest level accessors
+could significantly improve performance while remaining transparent to
+the user-level code.
+

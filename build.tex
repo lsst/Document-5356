@@ -1,0 +1,409 @@
+% Subsection 3.4: build
+
+\subsection{Software Development Environment}
+
+\subsubsection{Design and Development Process}
+
+Software design and development has been guided throughout the LSST project by
+standard, established methodologies for large-scale software
+development. These same methodologies were also applied in DC2. We highlight two
+here.
+
+\paragraph{Determining Requirements Through Use Case}
+
+The starting point for determining the scope of DC2 was the DC2 use case, a
+scenario describing the path through the LSST software taken by a single
+``visit,'' one particular astronomical exposure, as it goes through the various
+stages of processing --- image subtraction, source detection, object
+association, and moving object detection.
+
+The LSST DC2 use case was collaboratively developed by members of the LSST Data
+Management 
+team\footnote{http://dev.lsstcorp.org/trac/wiki/DC2NightlyProcessingUsecase}.
+Software requirements for DC2 were in turn derived from this use case; whatever
+infrastructure or tools necessary to accomplish this use case was a requirement
+for the DC2 software.
+
+\paragraph{UML model and DC2 specialization}
+
+One of the most dangerous traps in software development is trying to hit a
+moving target. Adding new features or additional technologies during the
+development process may improve the target, but it also moves it. By analyzing
+the project requirements in detail up front and capturing the results of that
+analysis, the development process can be protected against ``mission creep,'' in
+which an ever-moving goal results in an endless development phase.
+
+Software classes for LSST are designed in UML, the Unified Modeling Language, a
+general-purpose modeling language for diagramming object specifications. There
+is a general LSST model meant for the final production code, and specializations
+of that model for specific subgoals such as DC2. The model then guides the
+software development. The software design, and its representation in UML, is not
+absolutely frozen after the design phase, however; there is some necessary
+degree of give and take between the model and its implementation.
+
+The UML model was created and is maintained using a commercial software package,
+Enterprise Architect\footnote{http://www.sparxsystems.com.au/} allowing for the
+interactive and collaborative design of the model. Enterprise Architect also can
+ --- with a little persuasion --- reverse engineer source code into the UML
+model, meaning that the code and the model remain synchronized, keeping the
+model relevant while discouraging mass \textit{ad hoc} changes to the design.
+
+\subsubsection{The Role of Software Languages}
+
+As a project, we have chosen an object-oriented approach to software
+design, and so our choice of software languages for implementing the
+DMS reflects this.  We have identified three languages to be used for
+developing DMS code.  The vast majority of our code is to be
+implemented in C++, particularly the most compute-intensive
+components, so as to take advantage of the performance capabilities of
+a compiled language.  Python is intended for glueing together C++
+components into pipelines.  Java is expected to be useful for
+developing user interfaces as well as aspects of control systems where
+we can take advantage of existing middleware technologies.  
+
+In DC2, the vast majority of the code --- in particular, all of the code
+that makes up nightly pipelines --- was implemented in C++ and Python.
+For the Event System (\Sec{sMw-ev}), we adopted the widely-used Java
+Messaging system.  Consequently, a small amount of event-handling code
+for loading logging event data into a database was written in Java.
+
+C++ classes are made availabie in Python through the use of SWIG, a
+tool for creating bindings layers between C/C++ and various other
+languages.  For the most part this has worked exceedingly well:  while
+many of us as developers have expressed that the SWIG configuration
+files (the file that controls which and how C++ classes and functions
+are exposed to Python) have the feel of black magic, the result
+provides a fully featured interface that is convenient to use.  One
+challenge has been SWIG's support for C++ shared pointers
+(\code{boost::shared\_ptr}) and getting Python to properly handle
+garbage collection of the objects they point to.  For DC2, we found
+work-arounds sufficient to achieve our immediate goals.  We have also
+been in conversation with the SWIG development team which has resulted
+in improved support for shared pointers; we will take advantage of
+this in DC3.  
+  
+\subsubsection{Coding and Documentation Standards}
+
+Software developers on the LSST project are asked to ensure their source code
+meets a set of mutually agreed-upon standards for uniform coding practices and
+documentation. These standards, derived and adapted from respected open source
+best-practices guides, aid the software development process in many significant
+ways, reflecting as they do the consolidated, accumulated programming experience
+of leaders of the open source development movement.
+
+\paragraph{Coding Standards}
+
+An important principle guiding coding standards is the recognition that a
+developer's source code is read by two very different kinds of creature: the
+language compiler/interpreter grinding through it, and the human being
+extending, modifying, or debugging it. In a geographically distributed
+development environment like LSST, our source code must be more self-explanatory
+than might be necessary were the developer always sitting a short walk down the
+hallway. This is why the LSST standards cover not only technical facets of
+language usage but also how the code is documented. These standards were
+developed not to enforce consistency for consistency's sake, but to support code
+as self-explanatory as possible. Given the long life cycle of the LSST project,
+this clarity will also become important should the code need to be modified by
+other programmers at a later date to take advantage of new technologies or new
+algorithms --- a very likely development.
+
+Other coding standards take the form of recommended programming idioms, such as
+the convention that variables should be initialized on the same line on which
+they are declared. The advantages of such a convention are two-fold. From the
+computer's perspective, it helps guard against inadvertently using an
+uninitialized variable. From the human perspective, it prevents a long search,
+when reading or modifying the source code, for the line within a function in
+which the initialization actually occurs.
+
+The LSST coding standards are posted for reference on the LSST development Trac
+Wiki (described in more detail below)%
+\footnote{http://lsstdev.ncsa.uiuc.edu/trac/wiki/CodeStandards}. The LSST C++
+coding standard represents an amalgamation of standards collected from several
+guides to best practices in C++. The LSST Python coding standards are largely
+based on those proposed by Guido van Rossum, the creator of the Python language.
+
+A representative example of a Python guideline that might appear overly pedantic
+is the recommendation not to mix spaces and tabs when indenting, a distinction
+literally invisible in most text editors. There is a simple reason behind this
+suggestion, however: since the level of indentation carries semantic value in
+Python, a mixture of tabs and spaces for indentation can confuse the Python
+interpreter about how far a given line is intended to be indented. By sticking
+to the coding standards' proclamation ``Never mix tabs and spaces,'' this
+invisible source of potential error is eliminated.
+
+\paragraph{Documentation Standards}
+\label{build_docs}
+
+The project has standardized on 
+\code{doxygen}\footnote{http://www.stack.nl/\~{}dimitri/doxygen},
+an open-source documentation
+generator capable of extracting specially marked comments from C++ and Python
+source code and generating cleanly formatted documentation in either \LaTeX\ or
+HTML format. Keeping the documentation embedded inside the relevant source files
+helps keep the documentation synchronized with the source code it documents.
+
+
+LSST documentation standards indicate that each of the following must be
+documented in a format \code{doxygen} can recognize:
+
+\begin{itemize}
+
+\item{Every C++ source and header file (\code{.cc}, \code{.h}) and Python file
+    (\code{.py});}
+
+\item{Every C++ and Python class specification, documenting its purpose,
+    constructors, public instance variables, and public methods;}
+
+\item{Every supporting function defined outside a class or object specification.}
+
+\end{itemize}
+
+\paragraph{Testing}
+
+Our coding standards call for the creation of unit tests for all
+software components as part of the common development process.  In
+DC2, we obtained at least partial coverage of our code by unit tests
+(enough to demonstrate on a number of occasions the critical value to
+maintaining a large code base).  Most of the unit tests were created
+against the Python class interfaces using the standard Python package
+\code{unittest}, though some are written in C++ (using an ad hoc
+testing pattern, as opposed to a formal testing framework) to test
+lower level C++ interfaces directly.  In DC3 we plan to migrate our
+C++ tests to the framework provided by \code{boost::test}.  
+
+\paragraph{Formal Code Review}
+
+DC2 had a formal process of code review, in which LSST developers would inspect
+the code of other members, looking for general comments and also for compliance
+to LSST coding standards. Pragmatically, in the last months of development, the
+code reviews took a back seat, with the result that in some cases these reviews
+were indefinitely postponed as developer time became scarce. For DC3, we will
+ensure that code reviews are given equal priority with other development tasks
+so that they don't fade away as the DC3 runs approach.
+
+\subsubsection{Open Source Tools}
+
+\paragraph{Description and Usage}
+Where possible, LSST uses pre-existing open source software components, not only
+in the code itself but also as part of the development environment. Several
+robust open-source development tools play a central role in the LSST development
+environment. These tools are hosted on a designated server,
+\code{dev.lsstcorp.org}, which is located at NCSA.
+
+\paragraph{Trac} Trac\footnote{http://trac.edgewall.org} is a web-browser-based
+issue tracking system and wiki designed for managing software development
+projects. It gives the LSST team several tools:
+
+\begin{itemize} \item{\textbf{Issue Tracker.} Trac provides a system in which a
+given software issue --- a code defect, a needed enhancement, etc. --- is
+assigned a ``ticket,'' a record in the Trac database which serves as an
+accumulating point for information about the issue and its current status. Each
+ticket is assigned to a specific team member, who is responsible for bringing
+that ticket's issue to closure. The ticket describes the defect or enhancement,
+how to replicate the error, and other relevant information; other team members
+can add additional information and comments. Users can call up, via canned
+database queries, summaries of their tickets' status or other related
+information.}
+
+\item{\textbf{Wiki.} Trac also contains an embedded system of wiki pages,
+providing an easily updated set of project web pages. 
+The wiki pages are automatically indexed and 
+searchable.}
+
+\item{\textbf{Code Browser.} Trac interfaces directly with the Subversion
+repository described below, allowing a quick overview of a software component.
+Users can drill down to a given file in the repository and browse its current
+form, or compare it with a previous revision number with differences
+automatically highlighted.}
+
+These tools are tightly integrated; for example, a user can easily indicate
+a ticket number on a wiki page, and a link will automatically be created 
+to the relevant ticket. The link text will appear as strike-through if the
+ticket has been resolved. This allows a developer to quickly access 
+the code and related documentation in wiki format. 
+
+\end{itemize}
+
+\paragraph{Subversion} Subversion\footnote{http://subversion.tigris.org}
+is a source code version control system.
+It provides a curated library for LSST source code and related documents,
+maintaining a revision number for every document a programmer registers with
+(``checks into'') the Subversion repository. Subversion can also recreate
+previous versions of any file which has since been updated. Developers can
+``check out'' a given version of a project or subproject and be certain that
+it's the most up-to-date version available.
+
+\paragraph{Doxygen}
+
+The \code{doxygen} documentation system is described in the previous section.
+
+
+\paragraph{Issues and Lessons Learned}
+
+Trac and Subversion have been extremely useful tools for the software
+development team, and we will continue to use them in the future. The wiki has
+become an essential part of the communication process for the LSST team; it has
+become a general practice to create a wiki page rather than to send a word
+processor document via email when team members want to, for example, circulate a
+draft document or propose a standard.
+
+For DC2 we used tickets not only in their usual way but also as a method to
+track the development of new components. The ticket system was thus used as a
+way of tracking development workflow as well as tracking defects. There was a
+general consensus that the system was more successful at the latter than the
+former, because tickets alone are not a good container for information involving
+either project dependencies or the amount of work each ticket represents. In
+DC3 modifications will be made to the ticketing system to allow enhanced
+workflow management.
+
+The use of Subversion was quite successful, and the only differences we
+anticipate for DC3 are changes in the organization of the directory structure.
+
+As one would expect, doxygen is best at capturing the information closest to the
+code itself, at the level of specific APIs of specific components. The result
+for DC2 is that there was often a gap in documentation: very high-level
+documentation and low level documentation were available, in the form of project
+requirements and doxygen output respectively, but there was often nothing in
+between, on the level of subject overviews. Such overviews would be helpful for
+DC3 both for acclimating new team members and for helping team members better
+understand other parts of the project they may not have worked with closely.
+
+\subsubsection{LSST-Specific Tools}
+
+\paragraph{Description and Usage}
+
+In a typical Linux or OSX system, installing a software package usually means
+building a shared (dynamic) library which is then installed in a standard
+location, such as \code{/usr/local/lib}. Given the complexity of the LSST
+software stack, however, there is a drawback to this approach, especially during
+the development process. One of the banes of the software development world is
+version dependency; some software packages are alarmingly choosy about which
+versions of \textit{other} packages they will work with. 
+
+For most users, software versioning is a minor issue. For developers the issue
+of version management is critical. Comparing the results of running one version
+of a package against running another is an important diagnostic tool when
+debugging or optimizing code. Therefore the ability to easily switch between
+versions is useful for developers. However, the ability to switch easily between
+versions of a package is made complicated --- if not effectively obliterated ---
+when those multiple versions create identically named packages in identically
+named places.
+
+The LSST build system is designed to orthogonalize version dependencies,
+allowing multiple versions of a package to coexist on the same machine while
+guaranteeing, through the use of shell environment variables, that only one
+version is selected and activated at a time. This calls for some extra
+machinery, much of which is encapsulated in the EUPS package described below.
+
+\paragraph{\code{eups} and \code{lsstpkg}}
+
+The \code{eups} (Extended Unix Product Support) package management tool is used
+to install the software stack. Once invoked through a wrapper utility called
+\code{lsstpkg}, the installation process goes like this:
+
+\begin{enumerate}
+
+\item{\code{lsstpkg} invokes \code{eups}.}
+
+\item{\code{eups} requests from the server \code{dev.lsstcorp.org} the manifest
+related to a given package. The server has a list of the current versions of
+each package, so if the user doesn't request a given version he or she is served
+the current one.}
+
+\item{The server gathers and returns information about package dependencies,
+producing a complete list of the package's direct and indirect requirements. The
+system recursively resolves dependencies; if for example \code{mwi} requires
+Python and Python requires \code{readline}, the build system installs
+\code{readline} before Python and then proceeds to \code{mwi}. The requested
+packages and versions are checked against those already installed; if a package
+is already there, it won't be installed redundantly.}
+
+\item{The relevant source tarball and \code{pacman} package manager script are
+downloaded from the development server via \code{http}.}
+
+\item{The \code{pacman} script executes, expanding the tarball, compiling the
+source, and installing the package into a version-dependent location
+(e.g.~\code{.../stack/mwi/2.2/lib}) rather than its default location.
+The compilation performed by the \code{pacman} script may use the GNU make
+utilities, the SCons (Software Construction) tool
+(\code{http://www.scons.org}) used by LSST, or any other toolset} 
+
+\end{enumerate}
+
+Having multiple versions of a software package installed on a machine
+is only half the battle; effective development also requires a
+standard method of enabling the required version at runtime while disabling the others. In
+the LSST software stack this job is taken care of with \code{eups} (Extended
+Unix Product Support). Although \code{eups} is also used outside the LSST
+project, it shares a developer with LSST (Lupton) and contains some
+LSST-inspired modifications.
+
+Activating a package requires that its libraries or Python source be linked into
+the appropriate search paths so they can be executed. This manipulation of the
+shell environment variables is done by \code{eups}, which also maintains
+environment variables pointing to the package directory and storing version
+information. For example, setting up Python 2.5 creates the environment
+variables \code{PYTHON\_DIR}, containing the path to the Python 2.5 directory,
+and \code{SETUP\_PYTHON}, containing additional version information about the
+version that has been set up. \code{eups} also adds
+\code{.../stack/Linux/external/python/2.5/bin} to the \code{PATH} variable, so
+that the invocation \code{python} will cause that executable to start rather
+than any other versions that may also be installed on that machine.
+
+Setting up a package with \code{eups} is, like the software install, a process
+requiring the recursive resolution of dependencies. Each package tarball
+therefore includes a table of dependency information similar in nature to that
+of the manifests described in the build system. Setting up a package also sets
+up the packages it depends on, as determined by inspecting the \code{eups} table
+files associated with each package.
+
+\code{eups} can also report which packages are available on a system along with
+which versions are currently set up, making it possible to easily capture the
+total software configuration related to a given software run; each run of the
+nightly pipeline in DC2 captured the \code{eups} set-up information, making it
+possible to know exactly which version of each package was invoked for that run.
+
+\paragraph{Building Third-Party Open Source Software} In many cases some
+functionality required by LSST code was already available in open source form,
+and the corresponding package was added to the LSST software stack, as decided
+by the development team. The software so included ranges from generic
+programming utilities to astronomical tools specific to treating image files in
+the FITS format. Several of these packages are mentioned elsewhere in this report.
+
+\paragraph{Issues and Lessons Learned}
+
+The LSST build system has an ambitious aim: to allow developers, and eventually
+end users as well, to easily build a software stack containing dozens of
+packages --- some developed internally, many from elsewhere in the open-source
+ecosystem --- on 32- and 64-bit Linux and Darwin (the Macintosh BSD Unix
+environment). This goal was largely but not completely met.
+
+Since each of the third-party packages makes its own assumptions about the
+software platform it is being built on, corralling these packages --- especially
+for multiple platforms --- was sometimes quite challenging. Two packages in
+particular deserve a special mention in that regard. Boost includes and requires
+its own non-standard build system, called \code{bjam}, and does some
+idiosyncratic things with the naming and placement of its libraries. And
+CORAL/SEAL was particularly insular; because CORAL does not currently support
+the Darwin environment, its inclusion in the software stack effectively killed
+the ability to test the stack on the Macintosh, frustrating given the number of
+developers using Macs. Since in both cases an entire package was included for
+only a small subset of its capabilities, it is possible that for DC3 and beyond
+substitutes may be found. The database abstraction layer provided by CORAL, for
+example, will be replaced by LSST code for DC3.
+
+The \code{pacman} package installation manager will also be removed from the
+build system for DC3. We used very little of the \code{pacman} script
+capabilites, and \code{pacman}'s habits --- in particular, its compilation of
+\code{pacman} scripts into an unreadable format --- made debugging the
+installation process more difficult than necessary.
+
+LSST-developed packages in the software stack have been designed to use
+SCons rather than the GNU Autotools utilities (\code{autoconf}, \code{automake},
+\code{configure}, \code{libtool}, etc.).  SCons provides roughly analogous
+capabilities, but in a manner that avoids some of the fragility of the
+GNU make process --- and its small avalanche of largely redundant intermediate 
+files --- while easing cross-platform builds. It is anticipated that we will 
+rely more heavily on SCons in DC3.
+
+

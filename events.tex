@@ -1,0 +1,39 @@
+\subsubsection{The Event System}\label{sMw-ev}
+
+The event system is a set of components that can send and receive reliable, 
+asynchronous messages.  Components using the event system API subscribe to a 
+\textit{topic} to send and receive messages.   A message sent to a topic will be sent
+to all current subscribers on that topic.    The subscriber can then decide 
+what to do with that message based on its contents.   For example, in DC2, one
+message sent to a topic would cause one subscriber to the start the next stage
+of a pipeline,  while another subscriber to that same topic would simply 
+store the entire message in a database for later analysis. 
+
+The event system uses libraries and brokers that implement the Java Message 
+Service (JMS) protocol, a widely used, robust, open source standard. There are
+a number of commercial and open source distributions of JMS available.  The 
+Event System API was implemented using the open source C++ messaging library 
+ActiveMQ-CPP\footnote{http://activemq.apache.org}.
+The Event System API is a layer above ActiveMQ-CPP; we used 
+Swig to expose this API to Python. 
+
+The Event System API hides the configuration requirements of the ActiveMQ-CPP
+library, simplifying the creation of components that send and receive
+messages.  To create a message transmitter, the component can make one call 
+specifying the location of the message broker, and the topic to send
+subsequent messages to.   A component wishing to receive messages would 
+create a message receiver specifying the message broker and the topic to 
+subscribe to.    Messages send on a topic by the event transmitter would then
+be received by the component that created the event receiver.   Creation of
+these transmitters and receivers can be done individually, or globally to 
+further simplify configuration by using policy files.  There are also
+interfaces to allow out of order message retrieval and message reception
+timeouts.
+
+The Logging API was used to transform logging messages into events.  These
+events were sent out on a logging topic.   We used the open source messaging
+platform \code{Mule}\footnote{http://mule.mulesource.org}
+to create a client that received event messages from the logging
+topic and sent them to a database.  Events for pipeline coordination were also
+sent to a database.  These events were then later searched to identify 
+problems, and to do analysis of completed runs.
